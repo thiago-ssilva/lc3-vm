@@ -1,7 +1,12 @@
+use std::env;
+use std::process;
+
 const MEMORY_MAX: usize = 1 << 16;
 
+#[repr(u16)]
+#[derive(Debug, Copy, Clone)]
 enum Register {
-    R0 = 0,
+    R0,
     R1,
     R2,
     R3,
@@ -14,24 +19,44 @@ enum Register {
     Count,
 }
 
+impl TryFrom<u16> for Register {
+    type Error = ();
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Register::R0),
+            1 => Ok(Register::R1),
+            2 => Ok(Register::R2),
+            3 => Ok(Register::R3),
+            4 => Ok(Register::R4),
+            5 => Ok(Register::R5),
+            6 => Ok(Register::R6),
+            7 => Ok(Register::R7),
+            8 => Ok(Register::Pc),
+            9 => Ok(Register::Cond),
+            _ => Err(()),
+        }
+    }
+}
+
 #[repr(u16)]
 enum OpCode {
-    Br = 0, /* Branch */
-    Add,    /* add */
-    Ld,     /* load */
-    St,     /* store */
-    Jsr,    /* jump reguster */
-    And,    /* bitwise and */
-    Ldr,    /* load register */
-    Str,    /* store register */
-    Rti,    /* unused */
-    Not,    /* bitwise not */
-    Ldi,    /* load indirect */
-    Sti,    /* store indirect */
-    Jmp,    /* jump */
-    Res,    /* reserved (unused) */
-    Lea,    /* load effective address */
-    Trap,   /* execute trap */
+    Br,   /* Branch */
+    Add,  /* add */
+    Ld,   /* load */
+    St,   /* store */
+    Jsr,  /* jump reguster */
+    And,  /* bitwise and */
+    Ldr,  /* load register */
+    Str,  /* store register */
+    Rti,  /* unused */
+    Not,  /* bitwise not */
+    Ldi,  /* load indirect */
+    Sti,  /* store indirect */
+    Jmp,  /* jump */
+    Res,  /* reserved (unused) */
+    Lea,  /* load effective address */
+    Trap, /* execute trap */
 }
 
 impl TryFrom<u16> for OpCode {
@@ -81,37 +106,114 @@ impl VM {
         }
     }
 
-    pub fn set_register(&mut self, reg: Register, value: u16) {
+    pub fn run(&mut self) {
+        // since exacly one condition flag should be set at any given time, set the Z flag
+        self.set_register(Register::Cond, ConditionFlag::Zro as u16);
+        // set the PC to starting position 0x3000 is the default
+        self.set_register(Register::Pc, 0x3000);
+
+        loop {
+            let pc = self.get_register(Register::Pc);
+            let instr: u16 = self.mem_read(pc);
+            self.set_register(Register::Pc, pc.wrapping_add(1));
+
+            let op = match OpCode::try_from(instr >> 12) {
+                Ok(code) => code,
+                Err(_) => break,
+            };
+
+            match op {
+                OpCode::Add => {
+                    /* destination register */
+                    let r0 = Register::try_from((instr >> 9) & 0x7).unwrap();
+                    /* first operand (SR1) */
+                    let r1 = Register::try_from((instr >> 6) & 0x7).unwrap();
+                    /* where we are in immediate mode */
+                    let imm_flag = (instr >> 5) & 0x1;
+
+                    if imm_flag == 1 {
+                        let imm5 = sign_extend(instr & 0x1F, 5);
+                        let result = self.get_register(r1).wrapping_add(imm5);
+                        self.set_register(r0, result);
+                    } else {
+                        let r2 = Register::try_from(instr & 0x7).unwrap();
+                        let result = self.get_register(r1).wrapping_add(self.get_register(r2));
+                        self.set_register(r0, result);
+                    }
+
+                    self.update_flags(r0);
+                }
+                OpCode::And => todo!(),
+                OpCode::Not => todo!(),
+                OpCode::Br => todo!(),
+                OpCode::Jmp => todo!(),
+                OpCode::Jsr => todo!(),
+                OpCode::Ld => todo!(),
+                OpCode::Ldi => todo!(),
+                OpCode::Ldr => todo!(),
+                OpCode::Lea => todo!(),
+                OpCode::St => todo!(),
+                OpCode::Sti => todo!(),
+                OpCode::Str => todo!(),
+                OpCode::Trap => todo!(),
+                OpCode::Res | OpCode::Rti => break,
+            }
+        }
+    }
+
+    fn set_register(&mut self, reg: Register, value: u16) {
         self.registers[reg as usize] = value;
     }
 
-    pub fn mem_read(&self, address: u16) -> u16 {
+    fn mem_read(&self, address: u16) -> u16 {
         todo!()
     }
 
-    pub fn get_register(&self, reg: Register) -> u16 {
-        todo!()
+    fn get_register(&self, reg: Register) -> u16 {
+        self.registers[reg as usize]
+    }
+
+    fn update_flags(&mut self, r: Register) {
+        let val = self.get_register(r);
+        let flag = if val == 0 {
+            ConditionFlag::Zro
+        } else if val >> 15 & 1 == 1 {
+            ConditionFlag::Neg
+        } else {
+            ConditionFlag::Pos
+        };
+
+        self.set_register(Register::Cond, flag as u16);
     }
 }
 
 fn main() {
-    let mut vm = VM::new();
+    let args: Vec<String> = env::args().collect();
 
-    // since exacly one condition flag should be set at any given time, set the Z flag
-    vm.set_register(Register::Cond, ConditionFlag::Zro as u16);
-    // set the PC to starting position 0x3000 is the default
-    vm.set_register(Register::Pc, 0x3000);
+    if args.len() < 2 {
+        eprintln!("lc3 [image-file1] ...\n");
+        process::exit(2);
+    }
 
-    let mut running = true;
-
-    while running {
-        let pc = vm.get_register(Register::Pc);
-        let instr: u16 = vm.mem_read(pc);
-        vm.set_register(Register::Pc, pc.wrapping_add(1));
-        let op = OpCode::try_from(instr >> 12).expect("Invalid op code");
-
-        match op {
-            _ => todo!(),
+    for filename in &args[1..] {
+        if !read_image(filename) {
+            eprintln!("Failed to load image: {}", filename);
+            process::exit(1);
         }
+    }
+
+    let mut vm = VM::new();
+    vm.run();
+}
+
+pub fn read_image(filename: &str) -> bool {
+    todo!()
+}
+
+pub fn sign_extend(x: u16, bit_count: u8) -> u16 {
+    if ((x >> (bit_count - 1)) & 1) == 1 {
+        x | (0xFFFF << bit_count)
+    } else {
+        x
     }
 }
