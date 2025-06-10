@@ -143,13 +143,46 @@ impl VM {
 
                     self.update_flags(r0);
                 }
-                OpCode::And => todo!(),
+                OpCode::And => {
+                    /* destination register */
+                    let r0 = Register::try_from((instr >> 9) & 0x7).unwrap();
+                    /* first operand (SR1) */
+                    let r1 = Register::try_from((instr >> 6) & 0x7).unwrap();
+                    /* where we are in immediate mode */
+                    let imm_flag = (instr >> 5) & 0x1;
+
+                    let result = if imm_flag == 1 {
+                        let imm5 = sign_extend(instr & 0x1F, 5);
+                        self.get_register(r1) & imm5
+                    } else {
+                        let r2 = Register::try_from(instr & 0x7).unwrap();
+                        self.get_register(r1) & self.get_register(r2)
+                    };
+
+                    self.set_register(r0, result);
+                    self.update_flags(r0);
+                }
                 OpCode::Not => todo!(),
                 OpCode::Br => todo!(),
                 OpCode::Jmp => todo!(),
                 OpCode::Jsr => todo!(),
                 OpCode::Ld => todo!(),
-                OpCode::Ldi => todo!(),
+                OpCode::Ldi => {
+                    /* destination register */
+                    let r0 = Register::try_from((instr >> 9) & 0x7).unwrap();
+                    /* PcOffset 9*/
+                    let pc_offset = sign_extend(instr & 0x1FF, 9);
+                    /* add pc_offset to the current PC, look at that memory location to get the final address */
+
+                    let pc = self.get_register(Register::Pc);
+                    // Read the address from memory at (PC + offset)
+                    let addr = self.mem_read(pc.wrapping_add(pc_offset));
+                    // Read the actual value from that address
+                    let val = self.mem_read(addr);
+
+                    self.set_register(r0, val);
+                    self.update_flags(r0);
+                }
                 OpCode::Ldr => todo!(),
                 OpCode::Lea => todo!(),
                 OpCode::St => todo!(),
