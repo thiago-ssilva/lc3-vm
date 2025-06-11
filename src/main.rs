@@ -1,5 +1,8 @@
-use std::env;
-use std::process;
+use std::io::Write;
+use std::{env, process};
+
+use crossterm::event::{self, Event, KeyCode};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 
 const MEMORY_MAX: usize = 1 << 16;
 
@@ -343,12 +346,69 @@ impl VM {
                     self.set_register(Register::R7, self.get_register(Register::Pc));
                     let trap = TrapCode::try_from(instr & 0xFF).unwrap();
                     match trap {
-                        TrapCode::Getc => todo!(),
-                        TrapCode::Out => todo!(),
-                        TrapCode::Puts => todo!(),
-                        TrapCode::In => todo!(),
-                        TrapCode::Putsp => todo!(),
-                        TrapCode::Halt => todo!(),
+                        TrapCode::Getc => {
+                            let ch = getchar_raw();
+                            self.set_register(Register::R0, ch as u16);
+                            self.update_flags(Register::R0);
+                        }
+                        TrapCode::Out => {
+                            let ch = self.get_register(Register::R0) as u8 as char;
+                            print!("{}", ch);
+                            std::io::stdout().flush().unwrap();
+                        }
+                        TrapCode::Puts => {
+                            let mut address = self.get_register(Register::R0);
+                            loop {
+                                let ch = self.mem_read(address);
+
+                                if ch == 0 {
+                                    break;
+                                }
+
+                                print!("{}", ch as u8 as char);
+                                address = address.wrapping_add(1)
+                            }
+
+                            std::io::stdout().flush().unwrap();
+                        }
+                        TrapCode::In => {
+                            print!("Enter a character: ");
+                            std::io::stdout().flush().unwrap(); // Make sure prompt appears before input
+
+                            let ch = getchar_raw(); // Read unbuffered character
+                            print!("{}", ch); // Echo back
+                            std::io::stdout().flush().unwrap(); // Flush echo immediately
+
+                            self.set_register(Register::R0, ch as u16);
+                            self.update_flags(Register::R0);
+                        }
+                        TrapCode::Putsp => {
+                            /*one char per byte (two bytes per word) here we need to swap back to
+                             * big endian format*/
+                            let mut address = self.get_register(Register::R0);
+
+                            loop {
+                                let word = self.mem_read(address);
+
+                                if word == 0 {
+                                    break;
+                                }
+
+                                let char1 = (word & 0xFF) as u8;
+                                print!("{}", char1 as char);
+
+                                let char2 = (word >> 8) as u8;
+                                if char2 != 0 {
+                                    print!("{}", char2 as char);
+                                }
+                                address = address.wrapping_add(1);
+                            }
+                            std::io::stdout().flush().unwrap();
+                        }
+                        TrapCode::Halt => {
+                            println!("HALT");
+                            break;
+                        }
                     }
                 }
                 OpCode::Res | OpCode::Rti => break,
@@ -385,7 +445,6 @@ impl VM {
         self.set_register(Register::Cond, flag as u16);
     }
 }
-
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -415,4 +474,19 @@ pub fn sign_extend(x: u16, bit_count: u8) -> u16 {
     } else {
         x
     }
+}
+
+fn getchar_raw() -> char {
+    enable_raw_mode().unwrap();
+
+    let ch = loop {
+        if let Event::Key(key_event) = event::read().unwrap() {
+            if let KeyCode::Char(c) = key_event.code {
+                break c;
+            }
+        }
+    };
+
+    disable_raw_mode().unwrap();
+    ch
 }
