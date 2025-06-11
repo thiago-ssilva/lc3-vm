@@ -91,6 +91,32 @@ enum ConditionFlag {
     Neg = 1 << 2, /* N */
 }
 
+#[repr(u16)]
+enum TrapCode {
+    Getc = 0x20,  // get character from keyboard, not echoed onto the terminal
+    Out = 0x21,   // output a character
+    Puts = 0x22,  // output a word string
+    In = 0x23,    // get character from keyboard, echoed onto the terminal
+    Putsp = 0x24, // output a byte string
+    Halt = 0x25,  // halt the program
+}
+
+impl TryFrom<u16> for TrapCode {
+    type Error = ();
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        match value {
+            0x20 => Ok(Self::Getc),
+            0x21 => Ok(Self::Out),
+            0x22 => Ok(Self::Puts),
+            0x23 => Ok(Self::In),
+            0x24 => Ok(Self::Putsp),
+            0x25 => Ok(Self::Halt),
+            _ => Err(()),
+        }
+    }
+}
+
 const REGISTER_COUNT: usize = Register::Count as usize;
 
 struct VM {
@@ -283,9 +309,48 @@ impl VM {
 
                     self.mem_write(address, value);
                 }
-                OpCode::Sti => todo!(),
-                OpCode::Str => todo!(),
-                OpCode::Trap => todo!(),
+                OpCode::Sti => {
+                    /*SR*/
+                    let r0 = Register::try_from((instr >> 9) & 0x7).unwrap();
+                    /*PCoffset9*/
+                    let pc_offset = sign_extend(instr & 0x1FF, 9);
+
+                    /*Content of the register SR*/
+                    let value = self.get_register(r0);
+
+                    /* Memory Address */
+                    let pc = self.get_register(Register::Pc);
+                    let address = pc.wrapping_add(pc_offset);
+
+                    self.mem_write(self.mem_read(address), value);
+                }
+                OpCode::Str => {
+                    /*SR*/
+                    let r0 = Register::try_from((instr >> 9) & 0x7).unwrap();
+
+                    /*BaseR*/
+                    let base_r = Register::try_from((instr >> 6) & 0x7).unwrap();
+
+                    /*offset6*/
+                    let base_offset = sign_extend(instr & 0x3F, 6);
+
+                    /* memory address*/
+                    let address = self.get_register(base_r).wrapping_add(base_offset);
+
+                    self.mem_write(address, self.get_register(r0));
+                }
+                OpCode::Trap => {
+                    self.set_register(Register::R7, self.get_register(Register::Pc));
+                    let trap = TrapCode::try_from(instr & 0xFF).unwrap();
+                    match trap {
+                        TrapCode::Getc => todo!(),
+                        TrapCode::Out => todo!(),
+                        TrapCode::Puts => todo!(),
+                        TrapCode::In => todo!(),
+                        TrapCode::Putsp => todo!(),
+                        TrapCode::Halt => todo!(),
+                    }
+                }
                 OpCode::Res | OpCode::Rti => break,
             }
         }
