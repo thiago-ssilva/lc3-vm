@@ -162,7 +162,15 @@ impl VM {
                     self.set_register(r0, result);
                     self.update_flags(r0);
                 }
-                OpCode::Not => todo!(),
+                OpCode::Not => {
+                    /* destination register */
+                    let r0 = Register::try_from((instr >> 9) & 0x7).unwrap();
+                    /* first operand (SR1) */
+                    let r1 = Register::try_from((instr >> 6) & 0x7).unwrap();
+
+                    self.set_register(r0, !self.get_register(r1));
+                    self.update_flags(r0);
+                }
                 OpCode::Br => todo!(),
                 OpCode::Jmp => todo!(),
                 OpCode::Jsr => todo!(),
