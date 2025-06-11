@@ -113,6 +113,7 @@ impl VM {
         self.set_register(Register::Pc, 0x3000);
 
         loop {
+            /* mem red and advance pc */
             let pc = self.get_register(Register::Pc);
             let instr: u16 = self.mem_read(pc);
             self.set_register(Register::Pc, pc.wrapping_add(1));
@@ -171,9 +172,38 @@ impl VM {
                     self.set_register(r0, !self.get_register(r1));
                     self.update_flags(r0);
                 }
-                OpCode::Br => todo!(),
-                OpCode::Jmp => todo!(),
-                OpCode::Jsr => todo!(),
+                OpCode::Br => {
+                    let pc_offset = sign_extend(instr & 0x1FF, 9);
+                    let cond_flag = (instr >> 9) & 0x7;
+
+                    if self.get_register(Register::Cond) == cond_flag {
+                        let pc = self.get_register(Register::Pc);
+                        self.set_register(Register::Pc, pc.wrapping_add(pc_offset));
+                    }
+                }
+                OpCode::Jmp => {
+                    let base_r = Register::try_from((instr >> 6) & 0x7).unwrap();
+                    let target_address = self.get_register(base_r);
+                    self.set_register(Register::Pc, target_address);
+                }
+                OpCode::Jsr => {
+                    /* first save incremented Pc into R7 */
+                    let pc = self.get_register(Register::Pc);
+                    self.set_register(Register::R7, pc);
+
+                    let long_flag = (instr >> 11) & 1;
+
+                    if long_flag == 1 {
+                        // JSR: PC-relative offset
+                        let offset = sign_extend(instr & 0x7FF, 11);
+                        let new_pc = pc.wrapping_add(offset);
+                        self.set_register(Register::Pc, new_pc);
+                    } else {
+                        // JSRR: Base register
+                        let r1 = Register::try_from((instr >> 6) & 0x7).unwrap();
+                        self.set_register(Register::Pc, self.get_register(r1));
+                    }
+                }
                 OpCode::Ld => todo!(),
                 OpCode::Ldi => {
                     /* destination register */
