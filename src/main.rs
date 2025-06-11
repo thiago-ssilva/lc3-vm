@@ -248,7 +248,25 @@ impl VM {
                     /* Update flags with the content */
                     self.update_flags(r0);
                 }
-                OpCode::Lea => todo!(),
+                OpCode::Lea => {
+                    /* DR */
+                    let r0 = Register::try_from((instr >> 9) & 0x7).unwrap();
+
+                    /*PcOffset9*/
+                    let pc_offset = sign_extend(instr & 0x1FF, 9);
+
+                    /* Incremented PC */
+                    let pc = self.get_register(Register::Pc);
+
+                    /*Address*/
+                    let address = pc.wrapping_add(pc_offset);
+
+                    /*This address is loaded into DR*/
+                    self.set_register(r0, address);
+
+                    /*The conditions are set based on the value loaded */
+                    self.update_flags(r0);
+                }
                 OpCode::St => todo!(),
                 OpCode::Sti => todo!(),
                 OpCode::Str => todo!(),
