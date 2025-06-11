@@ -267,7 +267,22 @@ impl VM {
                     /*The conditions are set based on the value loaded */
                     self.update_flags(r0);
                 }
-                OpCode::St => todo!(),
+                OpCode::St => {
+                    /*SR*/
+                    let r0 = Register::try_from((instr >> 9) & 0x7).unwrap();
+
+                    /*PCoffset9*/
+                    let pc_offset = sign_extend(instr & 0x1FF, 9);
+
+                    /*Content of the register SR*/
+                    let value = self.get_register(r0);
+
+                    /* Memory Address */
+                    let pc = self.get_register(Register::Pc);
+                    let address = pc.wrapping_add(pc_offset);
+
+                    self.mem_write(address, value);
+                }
                 OpCode::Sti => todo!(),
                 OpCode::Str => todo!(),
                 OpCode::Trap => todo!(),
@@ -281,6 +296,10 @@ impl VM {
     }
 
     fn mem_read(&self, address: u16) -> u16 {
+        todo!()
+    }
+
+    fn mem_write(&mut self, address: u16, value: u16) {
         todo!()
     }
 
