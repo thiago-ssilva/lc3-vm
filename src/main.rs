@@ -204,7 +204,14 @@ impl VM {
                         self.set_register(Register::Pc, self.get_register(r1));
                     }
                 }
-                OpCode::Ld => todo!(),
+                OpCode::Ld => {
+                    let r0 = Register::try_from((instr >> 9) & 0x7).unwrap();
+                    let pc_offset = sign_extend(instr & 0x1FF, 9);
+                    let pc = self.get_register(Register::Pc);
+                    let value = self.mem_read(pc.wrapping_add(pc_offset));
+                    self.set_register(r0, value);
+                    self.update_flags(r0);
+                }
                 OpCode::Ldi => {
                     /* destination register */
                     let r0 = Register::try_from((instr >> 9) & 0x7).unwrap();
@@ -221,7 +228,26 @@ impl VM {
                     self.set_register(r0, val);
                     self.update_flags(r0);
                 }
-                OpCode::Ldr => todo!(),
+                OpCode::Ldr => {
+                    /* DR */
+                    let r0 = Register::try_from((instr >> 9) & 0x7).unwrap();
+                    /* offset6 */
+                    let offset = sign_extend(instr & 0x3F, 6);
+                    /* BaseR */
+                    let base_r = Register::try_from((instr >> 6) & 0x7).unwrap();
+
+                    /* Add offse to content of baser register */
+                    let address = self.get_register(base_r).wrapping_add(offset);
+
+                    /* Get the content in memory of address */
+                    let value = self.mem_read(address);
+
+                    /*Load vlaue into DR*/
+                    self.set_register(r0, value);
+
+                    /* Update flags with the content */
+                    self.update_flags(r0);
+                }
                 OpCode::Lea => todo!(),
                 OpCode::St => todo!(),
                 OpCode::Sti => todo!(),
